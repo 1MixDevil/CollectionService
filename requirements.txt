@@ -9,3 +9,8 @@ pydantic
 pytest
 pytest-asyncio
 httpx
+aiohttp
+lxml
+pandas
+pillow
+requests

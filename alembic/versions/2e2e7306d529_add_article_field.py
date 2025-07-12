@@ -1,8 +1,8 @@
-"""Initial migration
+"""add article field
 
-Revision ID: e884c45fedd8
+Revision ID: 2e2e7306d529
 Revises: 
-Create Date: 2025-07-11 22:37:57.957530
+Create Date: 2025-07-12 20:42:43.383390
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e884c45fedd8'
+revision: str = '2e2e7306d529'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,7 +24,9 @@ def upgrade() -> None:
     op.create_table('type_of_collect',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
+    sa.Column('article', sa.String(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('article'),
     sa.UniqueConstraint('name'),
     schema='figure'
     )

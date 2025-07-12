@@ -20,6 +20,8 @@ from app.crud.figure_crud import (
     get_figure_detail
 )
 
+from app.businessLogic.parser import FastFigureUpdater
+
 router = APIRouter(prefix="/figure", tags=["figure"])
 
 
@@ -94,9 +96,27 @@ def delete_fig(fig_id: int, db: Session = Depends(get_db)):
 
 # — FigureToUser endpoints (по пользователю) —
 
-@router.get("/user/{user_id}/", response_model=List[FigureToUserRead])
+@router.get(
+    "/user/{user_id}/",
+    response_model=List[FigureToUserRead],
+    status_code=status.HTTP_200_OK
+)
 def read_user_figures(user_id: int, db: Session = Depends(get_db)):
-    return list_user_figures(db, user_id)
+    records = list_user_figures(db, user_id)
+    result = []
+    for rec in records:
+        # rec.figure — это ORM‑объект Figure
+        result.append(FigureToUserRead(
+            id=rec.id,
+            user_id=rec.user_id,
+            bricklink_id=rec.figure.bricklink_id,
+            price_buy=rec.price_buy,
+            price_sale=rec.price_sale,
+            description=rec.description,
+            buy_date=rec.buy_date,
+            sale_date=rec.sale_date,
+        ))
+    return result
 
 @router.post("/user/", response_model=FigureToUserRead, status_code=status.HTTP_201_CREATED)
 def create_user_figure(rec: FigureToUserCreate, db: Session = Depends(get_db)):
@@ -115,3 +135,13 @@ def delete_user_figure_endpoint(rec_id: int, db: Session = Depends(get_db)):
         delete_user_figure(db, rec_id)
     except NoResultFound as e:
         raise HTTPException(404, str(e))
+    
+@router.put("/update_figures/")
+async def update_figures(
+    article: str,
+    max_miss: int = 50,
+    pad_length: int = 3,
+    db: Session = Depends(get_db)
+):
+    added = await FastFigureUpdater.update(db, article, max_miss, pad_length=3)
+    return {"added": added}

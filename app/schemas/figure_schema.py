@@ -42,6 +42,7 @@ class FigureRead(FigureBase):
 class FigureToUserRead(BaseModel):
     id: int
     user_id: int
+    bricklink_id: str                # ← добавили
     price_buy: Optional[float]
     price_sale: Optional[float]
     description: Optional[str]
@@ -63,13 +64,13 @@ class FigureDetail(FigureRead):
 # — FigureToUser —
 
 class FigureToUserCreate(BaseModel):
-    user_id: int = Field(..., example=42)
-    figure_id: int = Field(..., example=7)
-    price_buy: Optional[float]
-    price_sale: Optional[float]
-    description: Optional[str]
-    buy_date: Optional[date]
-    sale_date: Optional[date]
+    user_id: int                = Field(..., example=42)
+    bricklink_id: str           = Field(..., example="75102")
+    price_buy: Optional[float]  = Field(None, allow_none=True) #  <--  Здесь!
+    price_sale: Optional[float] = Field(None, allow_none=True) #  <--  И здесь!
+    description: Optional[str]  = Field(None, allow_none=True)  #  <--  И тут!
+    buy_date: Optional[date]    = Field(None, allow_none=True)    #  <--  И здесь!
+    sale_date: Optional[date]   = Field(None, allow_none=True)   #  <--  И здесь!
 
 class FigureToUserUpdate(BaseModel):
     price_buy: Optional[float]

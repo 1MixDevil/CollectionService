@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy import func
 
-from app.models.figure import Figure, FigureToUser, CollectType
+from app.models.figures_model import Figure, FigureToUser, CollectType
 from app.schemas.figure_schema import (
     CollectTypeCreate, 
     FigureCreate, FigureUpdate,
@@ -80,7 +80,18 @@ def list_user_figures(db: Session, user_id: int) -> List[FigureToUser]:
     return db.query(FigureToUser).filter_by(user_id=user_id).all()
 
 def add_figure_to_user(db: Session, data: FigureToUserCreate) -> FigureToUser:
-    rec = FigureToUser(**data.dict())
+    fig = db.query(Figure).filter_by(bricklink_id=data.bricklink_id).first()
+    if not fig:
+        raise NoResultFound(f"Figure with bricklink_id={data.bricklink_id} not found")
+    rec = FigureToUser(
+        user_id     = data.user_id,
+        figure_id   = fig.id,
+        price_buy   = data.price_buy,
+        price_sale  = data.price_sale,
+        description = data.description,
+        buy_date    = data.buy_date,
+        sale_date   = data.sale_date,
+    )
     db.add(rec)
     db.commit()
     db.refresh(rec)
