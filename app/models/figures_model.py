@@ -9,7 +9,7 @@ class Figure(Base):
     __table_args__ = {"schema": "figure"}
 
     id                = Column(Integer, primary_key=True, index=True)
-    name              = Column(String, unique=True, nullable=False)
+    name              = Column(String, unique=False, nullable=False)
     bricklink_id      = Column(String, unique=True, nullable=False)
     type_collected_id = Column(Integer, ForeignKey("figure.type_of_collect.id"))
 
@@ -41,5 +41,6 @@ class CollectType(Base):
     id      = Column(Integer, primary_key=True)
     name    = Column(String, unique=True, nullable=False) #Star Wars
     article = Column(String, unique=True, nullable=False) #sw
+    pad_len = Column(Integer, unique=True, nullable=False) # 4(sw/1234/)
 
     figures = relationship("Figure", back_populates="type_collected")

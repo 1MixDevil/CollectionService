@@ -7,8 +7,10 @@ from app.core.db import get_db
 from app.schemas.figure_schema import (
     CollectTypeCreate, CollectTypeRead,
     FigureCreate, FigureRead, FigureUpdate, FigureDetail,
-    FigureToUserCreate, FigureToUserRead, FigureToUserUpdate, FigureToUserReadFull
+    FigureToUserCreate, FigureToUserRead, FigureToUserUpdate, FigureToUserReadFull, FigureInfo
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from app.crud.figure_crud import (
     # CollectType
     create_collect_type, get_collect_type, list_collect_types, update_collect_type, delete_collect_type,
@@ -17,7 +19,7 @@ from app.crud.figure_crud import (
     # FigureToUser
     list_user_figures, add_figure_to_user, update_user_figure, delete_user_figure,
     # detail
-    get_figure_detail
+    get_figure_detail, get_figure_info_crud
 )
 
 from app.businessLogic.parser import FastFigureUpdater
@@ -110,6 +112,7 @@ def read_user_figures(user_id: int, db: Session = Depends(get_db)):
             id=rec.id,
             user_id=rec.user_id,
             bricklink_id=rec.figure.bricklink_id,
+            name=rec.figure.name,
             price_buy=rec.price_buy,
             price_sale=rec.price_sale,
             description=rec.description,
@@ -129,10 +132,10 @@ def patch_user_figure(rec_id: int, data: FigureToUserUpdate, db: Session = Depen
     except NoResultFound as e:
         raise HTTPException(404, str(e))
 
-@router.delete("/user/{rec_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user_figure_endpoint(rec_id: int, db: Session = Depends(get_db)):
+@router.delete("/user/", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_figure_endpoint(user_id: str, bricklink_id: str, db: Session = Depends(get_db)):
     try:
-        delete_user_figure(db, rec_id)
+        delete_user_figure(db, user_id, bricklink_id)
     except NoResultFound as e:
         raise HTTPException(404, str(e))
     
@@ -140,8 +143,30 @@ def delete_user_figure_endpoint(rec_id: int, db: Session = Depends(get_db)):
 async def update_figures(
     article: str,
     max_miss: int = 50,
-    pad_length: int = 3,
     db: Session = Depends(get_db)
 ):
-    added = await FastFigureUpdater.update(db, article, max_miss, pad_length=3)
+    added = await FastFigureUpdater.update(db, article, max_miss)
     return {"added": added}
+
+@router.get(
+    "/info/",
+    response_model=FigureInfo,
+    status_code=status.HTTP_200_OK
+)
+def get_figure_info(
+    user_id:     int     = Query(..., description="ID пользователя"),
+    bricklink_id:str    = Query(..., description="Bricklink ID фигурки"),
+    db:          Session = Depends(get_db),
+):
+    
+    fig, user_record = get_figure_info_crud(db, user_id, bricklink_id)
+    if not fig:
+        raise HTTPException(status_code=404, detail="Figure not found")
+
+    return FigureInfo(
+        id                = fig.id,
+        name              = fig.name,
+        bricklink_id      = fig.bricklink_id,
+        type_collected_id = fig.type_collected_id,
+        user_record       = user_record,
+    )

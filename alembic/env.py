@@ -1,93 +1,74 @@
 from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
-from alembic import context
-
-from app.models.figures_model import Figure, FigureToUser, CollectType
 import os
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+
+from sqlalchemy import engine_from_config, pool, text
+from alembic import context
+from app.models import figures_model
+
+# Подключаем Base с MetaData(schema='auth')
+from app.core.db import Base
+
+# Alembic Config и URL
 config = context.config
-
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-POSTGRES_USER     = os.getenv("POSTGRES_USER", "postgres")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
-POSTGRES_HOST     = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT     = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB       = os.getenv("POSTGRES_DB", "your_db")
-
+POSTGRES = {
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", "password"),
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "port": os.getenv("POSTGRES_PORT", "5432"),
+    "db": os.getenv("POSTGRES_DB", "your_db"),
+}
 config.set_main_option(
     "sqlalchemy.url",
-    f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    f"postgresql+psycopg2://{POSTGRES['user']}:{POSTGRES['password']}"
+    f"@{POSTGRES['host']}:{POSTGRES['port']}/{POSTGRES['db']}"
 )
 
-# add your model's MetaData object here
-from app.core.db import Base
-# for 'autogenerate' support
+# Logging
+if config.config_file_name:
+    fileConfig(config.config_file_name)
+
+# Metadata вашей схемы
 target_metadata = Base.metadata
+SCHEMA = target_metadata.schema  # 'figure'
 
+# Функция-фильтр: пропускаем только объекты из figure (и public по умолчанию)
+def include_object(obj, name, type_, reflected, compare_to):
+    schema = getattr(obj, 'schema', None)
+    # Пропускаем только если это либо figure, либо без схемы (public)
+    return schema in (None, SCHEMA)
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-
-
-def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
+def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        version_table_schema="figure",
-        include_schemas=True,
+        include_schemas=True,           # Inspector читает все, но фильтруем ниже.
+        version_table_schema=SCHEMA,
+        default_schema_name=SCHEMA,
+        include_object=include_object,
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
-
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
+def run_migrations_online():
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-
-    with connectable.connect() as connection:
+    with connectable.connect() as conn:
         context.configure(
-            connection=connection, target_metadata=target_metadata,
-            version_table_schema="figure",
+            connection=conn,
+            target_metadata=target_metadata,
             include_schemas=True,
+            version_table_schema=SCHEMA,
+            default_schema_name=SCHEMA,
+            include_object=include_object,
         )
-
         with context.begin_transaction():
             context.run_migrations()
-
 
 if context.is_offline_mode():
     run_migrations_offline()

@@ -42,7 +42,8 @@ class FigureRead(FigureBase):
 class FigureToUserRead(BaseModel):
     id: int
     user_id: int
-    bricklink_id: str                # ← добавили
+    bricklink_id: str  
+    name: str
     price_buy: Optional[float]
     price_sale: Optional[float]
     description: Optional[str]
@@ -81,6 +82,18 @@ class FigureToUserUpdate(BaseModel):
 
 class FigureToUserReadFull(FigureToUserRead):
     figure: FigureRead
+
+    class Config:
+        orm_mode = True
+
+class FigureInfo(BaseModel):
+    # Основные поля фигурки
+    id: int
+    name: str
+    bricklink_id: str
+    type_collected_id: int
+
+    user_record: Optional[FigureToUserRead] = None
 
     class Config:
         orm_mode = True

@@ -7,7 +7,7 @@ from app.models.figures_model import Figure, FigureToUser, CollectType
 from app.schemas.figure_schema import (
     CollectTypeCreate, 
     FigureCreate, FigureUpdate,
-    FigureToUserCreate, FigureToUserUpdate
+    FigureToUserCreate, FigureToUserUpdate, FigureToUserRead
 )
 
 
@@ -80,7 +80,8 @@ def list_user_figures(db: Session, user_id: int) -> List[FigureToUser]:
     return db.query(FigureToUser).filter_by(user_id=user_id).all()
 
 def add_figure_to_user(db: Session, data: FigureToUserCreate) -> FigureToUser:
-    fig = db.query(Figure).filter_by(bricklink_id=data.bricklink_id).first()
+    fig = db.query(Figure).filter_by(bricklink_id=(data.bricklink_id).lower()).first()
+    print(fig)
     if not fig:
         raise NoResultFound(f"Figure with bricklink_id={data.bricklink_id} not found")
     rec = FigureToUser(
@@ -95,12 +96,41 @@ def add_figure_to_user(db: Session, data: FigureToUserCreate) -> FigureToUser:
     db.add(rec)
     db.commit()
     db.refresh(rec)
-    return rec
+    return FigureToUserRead(
+        id=rec.id,
+        user_id=rec.user_id,
+        figure_id=rec.figure_id,
+        bricklink_id=rec.figure.bricklink_id, 
+        name=rec.figure.name, 
+        price_buy=rec.price_buy,
+        price_sale=rec.price_sale,
+        description=rec.description,
+        buy_date=rec.buy_date,
+        sale_date=rec.sale_date,
+    )
 
-def get_user_figure_record(db: Session, rec_id: int) -> FigureToUser:
-    rec = db.query(FigureToUser).get(rec_id)
+def get_user_figure_record(
+    db: Session,
+    user_id: int,
+    bricklink_id: str
+) -> FigureToUser:
+    """
+    Ищет первую запись FigureToUser для данного пользователя и bricklink_id.
+    Если не найдена — бросает NoResultFound.
+    """
+    rec = (
+        db.query(FigureToUser)
+          .join(Figure, Figure.id == FigureToUser.figure_id)
+          .filter(
+              FigureToUser.user_id == user_id,
+              Figure.bricklink_id  == bricklink_id
+          )
+          .first()
+    )
     if not rec:
-        raise NoResultFound(f"FigureToUser id={rec_id} not found")
+        raise NoResultFound(
+            f"No FigureToUser for user_id={user_id} and bricklink_id={bricklink_id}"
+        )
     return rec
 
 def update_user_figure(db: Session, rec_id: int, data: FigureToUserUpdate) -> FigureToUser:
@@ -111,8 +141,8 @@ def update_user_figure(db: Session, rec_id: int, data: FigureToUserUpdate) -> Fi
     db.refresh(rec)
     return rec
 
-def delete_user_figure(db: Session, rec_id: int) -> None:
-    rec = get_user_figure_record(db, rec_id)
+def delete_user_figure(db: Session, user_id: str, bricklink_id: str) -> None:
+    rec = get_user_figure_record(db, user_id, bricklink_id)
     db.delete(rec)
     db.commit()
 
@@ -125,3 +155,34 @@ def get_figure_detail(db: Session, fig_id: int):
     # считаем владельцев
     count = db.query(func.count(FigureToUser.id)).filter_by(figure_id=fig_id).scalar() or 0
     return fig, owned, count
+
+def get_figure_info_crud(db: Session, user_id: int, bricklink_id: str):
+    # 1) Сам объект Figure
+    fig = db.query(Figure).filter(Figure.bricklink_id == bricklink_id).first()
+    if not fig:
+        return None, None
+
+    # 2) Запись пользователя (если есть)
+    rec = (
+        db.query(FigureToUser)
+          .filter(FigureToUser.figure_id == fig.id,
+                  FigureToUser.user_id   == user_id)
+          .first()
+    )
+
+    # 3) Вручную собираем Pydantic‑модель
+    user_record = None
+    if rec:
+        user_record = FigureToUserRead(
+            id           = rec.id,
+            user_id      = rec.user_id,
+            bricklink_id = fig.bricklink_id,  # или rec.figure.bricklink_id
+            name         = fig.name,
+            price_buy    = float(rec.price_buy)   if rec.price_buy  is not None else None,
+            price_sale   = float(rec.price_sale)  if rec.price_sale is not None else None,
+            description  = rec.description,
+            buy_date     = rec.buy_date,
+            sale_date    = rec.sale_date,
+        )
+
+    return fig, user_record

@@ -201,9 +201,14 @@ class FastFigureUpdater:
         article: str,
         max_miss: int = 50,
         max_suffix: int = 5,
-        lock: bool = True,
-        pad_length: int = 4
+        lock: bool = True
     ) -> int:
+        # получаем pad_length из базы
+        ct = db.query(CollectType).filter_by(article=article).first()
+        if not ct:
+            raise ValueError(f"CollectType '{article}' не найден")
+        pad_length = ct.pad_len
+
         if lock:
             lock_file = f"/tmp/bricklink_{article}.lock"
             if os.path.exists(lock_file):
@@ -213,21 +218,12 @@ class FastFigureUpdater:
 
         try:
             last_num, last_suffix = FastFigureUpdater.get_last_id(db, article)
-            new_records = await FastFigureUpdater.collect_figures(
-                article=article,
-                start_num=last_num,
-                start_suffix=last_suffix,
-                max_miss=max_miss,
-                max_suffix=max_suffix,
-                pad_length=pad_length
+            records = await FastFigureUpdater.collect_figures(
+                article, last_num, last_suffix, max_miss, max_suffix, pad_length
             )
-            if not new_records:
-                logger.info(f"No new records found for article={article}")
+            if not records:
                 return 0
-            ct = db.query(CollectType).filter_by(article=article).first()
-            if not ct:
-                raise ValueError(f"CollectType с article={article} не найден")
-            return FastFigureUpdater.insert_new_figures(db, ct, new_records)
+            return FastFigureUpdater.insert_new_figures(db, ct, records)
         finally:
             if lock:
                 os.remove(lock_file)
