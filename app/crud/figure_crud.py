@@ -10,6 +10,9 @@ from app.schemas.figure_schema import (
     FigureToUserCreate, FigureToUserUpdate, FigureToUserRead
 )
 
+from sqlalchemy import func, cast, text
+from sqlalchemy.types import Text
+
 
 # — CollectType CRUD —
 
@@ -186,3 +189,21 @@ def get_figure_info_crud(db: Session, user_id: int, bricklink_id: str):
         )
 
     return fig, user_record
+
+def get_similar_figures(db, typo: str, limit: int = 5, threshold: float = 0.3):
+    # Подставляем свою схему в search_path, чтобы найти similarity и gin_trgm_ops
+    db.execute(text("SET search_path TO figure;"))
+
+    typo_text = cast(typo, Text)
+    query = (
+        db.query(
+            Figure.id,
+            Figure.name,
+            Figure.bricklink_id,
+            func.similarity(Figure.name, typo_text).label("similarity")
+        )
+        .filter(func.similarity(Figure.name, typo_text) >= threshold)
+        .order_by(func.similarity(Figure.name, typo_text).desc())
+        .limit(limit)
+    )
+    return query.all()

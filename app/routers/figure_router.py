@@ -6,7 +6,7 @@ from sqlalchemy.exc import NoResultFound
 from app.core.db import get_db
 from app.schemas.figure_schema import (
     CollectTypeCreate, CollectTypeRead,
-    FigureCreate, FigureRead, FigureUpdate, FigureDetail,
+    FigureCreate, FigureRead, FigureUpdate, FigureDetail, SimilarFigure,
     FigureToUserCreate, FigureToUserRead, FigureToUserUpdate, FigureToUserReadFull, FigureInfo
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,7 +19,7 @@ from app.crud.figure_crud import (
     # FigureToUser
     list_user_figures, add_figure_to_user, update_user_figure, delete_user_figure,
     # detail
-    get_figure_detail, get_figure_info_crud
+    get_figure_detail, get_figure_info_crud, get_similar_figures
 )
 
 from app.businessLogic.parser import FastFigureUpdater
@@ -170,3 +170,31 @@ def get_figure_info(
         type_collected_id = fig.type_collected_id,
         user_record       = user_record,
     )
+
+@router.get(
+    "/similar/",
+    response_model=List[SimilarFigure],
+    status_code=status.HTTP_200_OK,
+    summary="Поиск похожих названий фигурок",
+    description="Ищет по pg_trgm сходству и возвращает топ-N совпадений.",
+)
+def find_similar_figures(
+    name: str = Query(..., description="Примерное имя фигурки"),
+    limit: int = Query(5, ge=1, le=50, description="Максимум результатов"),
+    threshold: float = Query(0.3, ge=0.0, le=1.0, description="Порог сходства (0–1)"),
+    db: Session = Depends(get_db),
+) -> List[SimilarFigure]:
+    # вызываем CRUD‑функцию
+    results = get_similar_figures(db, typo=name, limit=limit, threshold=threshold)
+
+    if not results:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Похожих фигурок не найдено",
+        )
+
+    # results — список tuples или ORM‑объектов с полями id, name, similarity
+    return [
+        SimilarFigure(id=r.id, name=r.name, bricklink_id=r.bricklink_id, similarity=r.similarity)
+        for r in results
+    ]

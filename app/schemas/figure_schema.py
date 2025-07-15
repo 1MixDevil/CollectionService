@@ -97,3 +97,12 @@ class FigureInfo(BaseModel):
 
     class Config:
         orm_mode = True
+
+class SimilarFigure(BaseModel):
+    id: int
+    name: str
+    bricklink_id: str
+    similarity: float
+
+    class Config:
+        orm_mode = True
