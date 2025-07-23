@@ -41,6 +41,6 @@ class CollectType(Base):
     id      = Column(Integer, primary_key=True)
     name    = Column(String, unique=True, nullable=False) #Star Wars
     article = Column(String, unique=True, nullable=False) #sw
-    pad_len = Column(Integer, unique=True, nullable=False) # 4(sw/1234/)
+    pad_len = Column(Integer, unique=False, nullable=False) # 4(sw/1234/)
 
     figures = relationship("Figure", back_populates="type_collected")
