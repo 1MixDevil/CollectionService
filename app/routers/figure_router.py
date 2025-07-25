@@ -143,7 +143,7 @@ def delete_user_figure_endpoint(user_id: str, bricklink_id: str, db: Session = D
 @router.put("/update_figures/")
 async def update_figures(
     article: str,
-    max_miss: int = 50,
+    max_miss: int = 20,
     db: Session = Depends(get_db)
 ):
     added = await FastFigureUpdater.update(db, article, max_miss)
