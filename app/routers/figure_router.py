@@ -2,6 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
+import asyncio
 
 from app.core.db import get_db
 from app.schemas.figure_schema import (
@@ -147,6 +148,49 @@ async def update_figures(
 ):
     added = await FastFigureUpdater.update(db, article, max_miss)
     return {"added": added}
+
+@router.put("/update_figures_all/", status_code=status.HTTP_200_OK)
+async def update_all_figures(
+    max_miss: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Запустить обновление данных для всех доступных артикулей параллельно.
+    Возвращает словарь с количеством добавленных фигур по каждому артикулу и общую сумму.
+    """
+    # Получаем все типы коллекций (каждый содержит поле article)
+    from app.models.figures_model import CollectType, Figure
+
+    collect_types = db.query(CollectType).all()
+    if not collect_types:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Не найден ни один тип для обновления"
+        )
+
+    # Формируем задачи для параллельного обновления
+    tasks = []
+    for ct in collect_types:
+        tasks.append(
+            FastFigureUpdater.update(db, ct.article, max_miss)
+        )
+
+    # Выполняем все задачи параллельно
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    summary = {}
+    total_added = 0
+
+    for ct, res in zip(collect_types, results):
+        if isinstance(res, Exception):
+            # Если при обновлении произошла ошибка, фиксируем её текст
+            summary[ct.article] = f"error: {res}"
+        else:
+            summary[ct.article] = res
+            total_added += res
+
+    return {"added_per_article": summary, "total_added": total_added}
+
 
 @router.get(
     "/info/",
