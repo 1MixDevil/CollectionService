@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy import func
@@ -224,3 +224,41 @@ def get_all_figures(db: Session, prefix: Optional[str] = None) -> List[str]:
     rows = query.order_by(Figure.bricklink_id).all()
     # .all() возвращает список кортежей [(id,), ...]
     return [row[0] for row in rows]
+
+
+def add_figures_to_user_bulk(
+    db: Session,
+    recs: List[FigureToUserCreate]
+) -> Tuple[List[FigureToUserRead], List[str]]:
+    """
+    Bulk add multiple figures to a user's collection.
+    Returns a tuple of (successfully_created, failed_bricklink_ids).
+    """
+    created_objs = []
+    failed = []
+
+    for rec in recs:
+        fig = db.query(Figure).filter(Figure.bricklink_id == rec.bricklink_id).one_or_none()
+        if not fig:
+            failed.append(rec.bricklink_id)
+            continue
+        obj = FigureToUser(
+            user_id=rec.user_id,
+            figure_id=fig.id,
+            price_buy=rec.price_buy,
+            price_sale=rec.price_sale,
+            description=rec.description,
+            buy_date=rec.buy_date,
+            sale_date=rec.sale_date,
+        )
+        db.add(obj)
+        created_objs.append(obj)
+
+    db.commit()
+
+    created = []
+    for obj in created_objs:
+        db.refresh(obj)
+        created.append(FigureToUserRead.from_orm(obj))
+
+    return created, failed

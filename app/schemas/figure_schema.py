@@ -39,10 +39,11 @@ class FigureRead(FigureBase):
         orm_mode = True
 
 # Детальная информация о связи «Figure ↔ User»
+
 class FigureToUserRead(BaseModel):
     id: int
     user_id: int
-    bricklink_id: str  
+    bricklink_id: str
     name: str
     price_buy: Optional[float]
     price_sale: Optional[float]
@@ -52,6 +53,11 @@ class FigureToUserRead(BaseModel):
 
     class Config:
         orm_mode = True
+
+class BulkAddResponse(BaseModel):
+    added: list[FigureToUserRead] = Field(..., description="Список успешно добавленных записей")
+    failed: list[str] = Field(..., description="Список артикулов, которые не удалось добавить")
+
 
 # Детальный вывод одной Figure
 class FigureDetail(FigureRead):
@@ -65,13 +71,13 @@ class FigureDetail(FigureRead):
 # — FigureToUser —
 
 class FigureToUserCreate(BaseModel):
-    user_id: int                = Field(..., example=42)
-    bricklink_id: str           = Field(..., example="75102")
-    price_buy: Optional[float]  = Field(None, allow_none=True) #  <--  Здесь!
-    price_sale: Optional[float] = Field(None, allow_none=True) #  <--  И здесь!
-    description: Optional[str]  = Field(None, allow_none=True)  #  <--  И тут!
-    buy_date: Optional[date]    = Field(None, allow_none=True)    #  <--  И здесь!
-    sale_date: Optional[date]   = Field(None, allow_none=True)   #  <--  И здесь!
+    user_id: int
+    bricklink_id: str
+    price_buy: Optional[float] = None
+    price_sale: Optional[float] = None
+    description: Optional[str] = None
+    buy_date: Optional[date] = None
+    sale_date: Optional[date] = None
 
 class FigureToUserUpdate(BaseModel):
     price_buy: Optional[float]
@@ -106,3 +112,16 @@ class SimilarFigure(BaseModel):
 
     class Config:
         orm_mode = True
+
+class BulkAddError(BaseModel):
+    index: int
+    payload: dict
+    error: str
+
+class BulkAddResponse(BaseModel):
+    successes: List[FigureToUserRead] = Field(
+        ..., description="Список успешно добавленных записей"
+    )
+    failures: List[BulkAddError] = Field(
+        ..., description="Список не добавленных записей с описанием ошибок"
+    )

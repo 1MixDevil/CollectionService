@@ -7,7 +7,7 @@ import asyncio
 from app.core.db import get_db
 from app.schemas.figure_schema import (
     CollectTypeCreate, CollectTypeRead,
-    FigureCreate, FigureRead, FigureUpdate, FigureDetail, SimilarFigure,
+    FigureCreate, FigureRead, FigureUpdate, FigureDetail, SimilarFigure, BulkAddResponse, BulkAddError,
     FigureToUserCreate, FigureToUserRead, FigureToUserUpdate, FigureToUserReadFull, FigureInfo
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -288,3 +288,39 @@ def read_all_figures(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return serials
+
+@router.post(
+    "/user/bulk/",
+    response_model=BulkAddResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Добавить несколько фигурок пользователю",
+    description="Принимает список фигурок и возвращает разделение на успешно добавленные и не добавленные."
+)
+def bulk_add_figures_to_user(
+    items: List[FigureToUserCreate],
+    db: Session = Depends(get_db)
+) -> BulkAddResponse:
+    successes: List[FigureToUserRead] = []
+    failures: List[BulkAddError] = []
+
+    for idx, item in enumerate(items):
+        try:
+            # Вызов вашего CRUD‑метода
+            rec = add_figure_to_user(db, item)
+            successes.append(rec)
+        except NoResultFound as e:
+            failures.append(BulkAddError(
+                index=idx,
+                payload=item.dict(),
+                error=f"NotFound: {e}"
+            ))
+            db.rollback()
+        except Exception as e:
+            failures.append(BulkAddError(
+                index=idx,
+                payload=item.dict(),
+                error=str(e)
+            ))
+            db.rollback()
+
+    return BulkAddResponse(successes=successes, failures=failures)
