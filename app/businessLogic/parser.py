@@ -80,85 +80,55 @@ class FastFigureUpdater:
         max_suffix: int,
         pad_length: int = 4
     ) -> List[Tuple[str, str]]:
-
         logger.info(f"[{article}] Starting collection with pad_length={pad_length}")
 
-        results = []
-        seen_ids = set()
-
-        miss = 0
-        miss_suffix = 0
+        results: List[Tuple[str, str]] = []
+        miss_num = 0
         num = start_num
-        suffix = chr(ord(start_suffix) + 1) if start_suffix else ''
-        
+
         timeout = aiohttp.ClientTimeout(total=FastFigureUpdater.FETCH_TIMEOUT)
         connector = aiohttp.TCPConnector(limit=FastFigureUpdater.CONCURRENCY)
-        semaphore = asyncio.Semaphore(FastFigureUpdater.CONCURRENCY)
 
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             while True:
-                candidates = []
-                suffixes = []
-
-                if suffix:
-                    for _ in range(max_suffix - miss_suffix):
-                        item_id = f"{article}{num:0{pad_length}d}{suffix}"
-                        candidates.append(item_id)
-                        suffixes.append(suffix)
-                        suffix = chr(ord(suffix) + 1)
+                any_found_for_num = False
+                # Check base ID
+                base_id = f"{article}{num:0{pad_length}d}"
+                name = await FastFigureUpdater.fetch_name(session, base_id)
+                if name:
+                    logger.info(f"FOUND     {base_id} → {name}")
+                    results.append((base_id, name))
+                    any_found_for_num = True
+                    miss_num = 0
                 else:
-                    item_id = f"{article}{num:0{pad_length}d}"
-                    candidates.append(item_id)
-                    suffixes.append('')
+                    logger.info(f"MISS      {base_id}")
+                    miss_num += 1
+                    if miss_num >= max_miss:
+                        logger.info(f"Reached max_miss={max_miss} for base, stopping.")
+                        break
 
-                async def fetch_and_record(item_id: str):
-                    async with semaphore:
-                        name = await FastFigureUpdater.fetch_name(session, item_id)
-                        return item_id, name
-
-                tasks = [fetch_and_record(cid) for cid in candidates]
-                responses = await asyncio.gather(*tasks)
-
-                any_found = False
-                for item_id, name in responses:
-                    seen_ids.add(item_id)
-                    if name:
-                        logger.info(f"FOUND     {item_id} → {name}")
-                        results.append((item_id, name))
-                        any_found = True
-                    else:
-                        logger.info(f"MISS      {item_id}")
-
-                if suffixes[0] != '':
-                    if any_found:
-                        miss = 0
+                # Check suffixes until max_suffix misses in a row
+                miss_suffix = 0
+                suffix_char = 'a'
+                while miss_suffix < max_suffix:
+                    suffixed_id = f"{article}{num:0{pad_length}d}{suffix_char}"
+                    name_s = await FastFigureUpdater.fetch_name(session, suffixed_id)
+                    if name_s:
+                        logger.info(f"FOUND     {suffixed_id} → {name_s}")
+                        results.append((suffixed_id, name_s))
+                        any_found_for_num = True
                         miss_suffix = 0
-                        suffix = chr(ord(suffixes[-1]) + 1)
                     else:
-                        miss_suffix += len(suffixes)
-                        logger.info(f"MISS_SUFFIX COUNT = {miss_suffix} for num={num}")
-                        if miss_suffix >= max_suffix:
-                            logger.info(f"Switching to next number (no suffixes valid)")
-                            miss_suffix = 0
-                            suffix = ''
-                            num += 1
-                else:
-                    if any_found:
-                        miss = 0
-                        num += 1
-                    else:
-                        miss += 1
-                        logger.info(f"MISS_NUM COUNT = {miss} for num={num}")
-                        if miss >= max_miss:
-                            logger.info(f"Reached max_miss={max_miss}, stopping.")
-                            break
-                        num += 1
+                        logger.info(f"MISS      {suffixed_id}")
+                        miss_suffix += 1
+                    suffix_char = chr(ord(suffix_char) + 1)
+                    await asyncio.sleep(0.1)
 
-                await asyncio.sleep(0.1)
+                # Advance to next number
+                num += 1
 
         logger.info(f"Total new records collected: {len(results)}")
         return results
-
 
     @staticmethod
     def insert_new_figures(db: Session, ct: CollectType, records: List[Tuple[str, str]]) -> int:
@@ -200,10 +170,9 @@ class FastFigureUpdater:
         db: Session,
         article: str,
         max_miss: int = 50,
-        max_suffix: int = 5,
+        max_suffix: int = 2,
         lock: bool = True
     ) -> int:
-        # получаем pad_length из базы
         ct = db.query(CollectType).filter_by(article=article).first()
         if not ct:
             raise ValueError(f"CollectType '{article}' не найден")
@@ -227,3 +196,6 @@ class FastFigureUpdater:
         finally:
             if lock:
                 os.remove(lock_file)
+
+# Пример запуска:
+# asyncio.run(FastFigureUpdater.update(db_session, 'sw', max_miss=50, max_suffix=5))

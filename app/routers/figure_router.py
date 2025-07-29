@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
@@ -20,8 +20,10 @@ from app.crud.figure_crud import (
     # FigureToUser
     list_user_figures, add_figure_to_user, update_user_figure, delete_user_figure,
     # detail
-    get_figure_detail, get_figure_info_crud, get_similar_figures
+    get_figure_detail, get_figure_info_crud, get_similar_figures, get_all_figures
 )
+
+from app.models.figures_model import FigureToUser
 
 from app.businessLogic.parser import FastFigureUpdater
 
@@ -97,7 +99,33 @@ def delete_fig(fig_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, str(e))
 
 
-# — FigureToUser endpoints (по пользователю) —
+# Новый endpoint для очистки всей коллекции пользователя
+@router.delete(
+    "/user/{user_id}/collection",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить все фигурки пользователя",
+    description="Полностью очищает коллекцию заданного пользователя"
+)
+def clear_user_collection_endpoint(user_id: int, db: Session = Depends(get_db)):
+    """
+    Bulk delete all FigureToUser records for given user in one operation.
+    """
+    try:
+        # Импортируйте модель FigureToUser сверху файла:
+        # from app.models.figures_model import FigureToUser
+        delete_count = (
+            db.query(FigureToUser)
+              .filter(FigureToUser.user_id == user_id)
+              .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при очистке коллекции: {e}"
+        )
+    return
 
 @router.get(
     "/user/{user_id}/",
@@ -242,3 +270,21 @@ def find_similar_figures(
         SimilarFigure(id=r.id, name=r.name, bricklink_id=r.bricklink_id, similarity=r.similarity)
         for r in results
     ]
+
+@router.get(
+    "/all/",
+    response_model=List[str],
+    summary="Вернуть все bricklink_id фигурок",
+)
+def read_all_figures(
+    prefix: Optional[str] = Query(None, description="Если указан — фильтрация по префиксу, например 'SW'"),
+    db: Session = Depends(get_db)
+) -> List[str]:
+    """
+    Возвращает отсортированный список всех `bricklink_id` из таблицы фигурок.
+    """
+    try:
+        serials = get_all_figures(db, prefix=prefix)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return serials

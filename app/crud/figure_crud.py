@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy import func
@@ -207,3 +207,20 @@ def get_similar_figures(db, typo: str, limit: int = 5, threshold: float = 0.3):
         .limit(limit)
     )
     return query.all()
+
+def get_all_figures(db: Session, prefix: Optional[str] = None) -> List[str]:
+    """
+    Запрашивает из БД все bricklink_id; если передан `prefix`, то только начи-
+    нающиеся с него, и возвращает их отсортированными.
+    """
+    query = db.query(Figure.bricklink_id)
+    if prefix:
+        print(prefix)
+        print(prefix)
+        print(prefix)
+        # SQL: WHERE bricklink_id LIKE 'SW%'
+        query = query.filter(Figure.bricklink_id.like(f"{prefix}%"))
+    # ORDER BY bricklink_id
+    rows = query.order_by(Figure.bricklink_id).all()
+    # .all() возвращает список кортежей [(id,), ...]
+    return [row[0] for row in rows]
