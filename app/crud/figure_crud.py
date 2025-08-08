@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy import func
+from fastapi import HTTPException
 
 from app.models.figures_model import Figure, FigureToUser, CollectType
 from app.schemas.figure_schema import (
@@ -86,7 +87,11 @@ def add_figure_to_user(db: Session, data: FigureToUserCreate) -> FigureToUser:
     fig = db.query(Figure).filter_by(bricklink_id=(data.bricklink_id).lower()).first()
     print(fig)
     if not fig:
-        raise NoResultFound(f"Figure with bricklink_id={data.bricklink_id} not found")
+        # Вместо NoResultFound возвращаем HTTP-ошибку
+        raise HTTPException(
+            status_code=404,
+            detail=f"Фигурка с артикулом {data.bricklink_id} не найдена"
+        )
     rec = FigureToUser(
         user_id     = data.user_id,
         figure_id   = fig.id,
