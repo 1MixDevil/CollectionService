@@ -139,7 +139,6 @@ def read_user_figures(user_id: int, db: Session = Depends(get_db)):
         # rec.figure — это ORM‑объект Figure
         result.append(FigureToUserRead(
             id=rec.id,
-            user_id=rec.user_id,
             bricklink_id=rec.figure.bricklink_id,
             name=rec.figure.name,
             price_buy=rec.price_buy,
