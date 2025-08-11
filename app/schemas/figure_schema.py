@@ -42,7 +42,6 @@ class FigureRead(FigureBase):
 
 class FigureToUserRead(BaseModel):
     id: int
-    user_id: int
     bricklink_id: str
     name: str
     price_buy: Optional[float]
